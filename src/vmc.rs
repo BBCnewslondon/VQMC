@@ -1,6 +1,8 @@
 use crate::hamiltonian::CoulombHamiltonian;
 use crate::metropolis::{MetropolisSampler, Walker};
 use crate::wavefunction::Wavefunction;
+use std::io::Write;
+use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
 pub struct VmcConfig {
@@ -9,6 +11,12 @@ pub struct VmcConfig {
     pub step_size: f64,
     pub seed: Option<u64>,
     pub sample_every: usize,
+
+    /// If set, write a CSV trace of sampled energies.
+    pub trace_csv: Option<PathBuf>,
+
+    /// Emit a trace row every N samples (after burn-in). Must be >= 1.
+    pub trace_every: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -59,6 +67,7 @@ impl RunningStats {
 pub fn run_vmc(h: &CoulombHamiltonian, wf: &dyn Wavefunction, cfg: &VmcConfig) -> VmcResult {
     assert_eq!(wf.n_electrons(), h.n_electrons);
     assert!(cfg.sample_every >= 1);
+    assert!(cfg.trace_every >= 1);
 
     let mut sampler = MetropolisSampler::new(cfg.step_size, cfg.seed);
     let mut walker: Walker = sampler.init_walker(wf);
@@ -76,6 +85,13 @@ pub fn run_vmc(h: &CoulombHamiltonian, wf: &dyn Wavefunction, cfg: &VmcConfig) -
 
     let mut stats = RunningStats::default();
 
+    let mut trace_writer = cfg.trace_csv.as_ref().map(|path| {
+        let file = std::fs::File::create(path).expect("create trace csv");
+        let mut w = std::io::BufWriter::new(file);
+        writeln!(w, "sample,step,energy_ha,mean_ha").expect("write trace header");
+        w
+    });
+
     // Sampling
     let mut sample_counter = 0usize;
     for step in 0..cfg.steps {
@@ -88,6 +104,13 @@ pub fn run_vmc(h: &CoulombHamiltonian, wf: &dyn Wavefunction, cfg: &VmcConfig) -
             let e = h.local_energy(wf, &walker.positions);
             stats.push(e);
             sample_counter += 1;
+
+            if let Some(w) = trace_writer.as_mut() {
+                if sample_counter % cfg.trace_every == 0 {
+                    writeln!(w, "{},{},{},{}", sample_counter, step, e, stats.mean())
+                        .expect("write trace row");
+                }
+            }
         }
     }
 
