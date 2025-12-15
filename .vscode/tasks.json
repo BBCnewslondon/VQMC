@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "cargo: build",
+      "type": "shell",
+      "command": "cargo build",
+      "problemMatcher": [
+        "$rustc"
+      ],
+      "group": "build"
+    },
+    {
+      "label": "cargo: run VMC (release)",
+      "type": "shell",
+      "command": "cargo run --release -- --wf pade --alpha 1.6875 --beta 0.30 --steps 50000 --burn-in 5000 --step-size 0.7 --seed 1",
+      "problemMatcher": [],
+      "group": "test"
+    }
+  ]
+}
